@@ -3,7 +3,7 @@ on:
   workflow_dispatch:
     inputs:
       clang_version:
-        description: Type the clang version of ur kernel
+        description: "Select Clang Version"
         required: true
         type: choice
         options:
@@ -15,7 +15,7 @@ on:
           - clang-stable
           
       kernel_source:
-        description: Kernel Source Code
+        description: "Select Kernel Source"
         required: true
         type: choice
         options:
@@ -24,7 +24,7 @@ on:
           - OnePlus12R-development
           
       kernel_branch:
-        description: Kernel Branch(such as lineage-23.2 sixteen-qpr1)
+        description: "Kernel Branch (e.g., lineage-23.2)"
         required: true
         type: string
         default: ""
@@ -116,25 +116,27 @@ jobs:
             "Official-KernelSU")
               curl -LSs "https://raw.githubusercontent.com/tiann/KernelSU/main/kernel/setup.sh" | bash -s main
               ;;
+            "KernelSU-Next"|"KernelSU-Next-with-susfs")
+              curl -LSs "https://raw.githubusercontent.com/rifsxd/KernelSU-Next/next/kernel/setup.sh" | bash -s next
+              ;;
             "KowSU")
                curl -LSs "https://raw.githubusercontent.com/KOWX712/KernelSU/main/kernel/setup.sh" | bash -s master
-              ;;
-            "KernelSU-Next")
-              curl -LSs "https://raw.githubusercontent.com/rifsxd/KernelSU-Next/next/kernel/setup.sh" | bash -s next
-              ;;
-            "KernelSU-Next-with-susfs")
-              curl -LSs "https://raw.githubusercontent.com/rifsxd/KernelSU-Next/next/kernel/setup.sh" | bash -s next
               ;;
             "ReSukiSU"|"ReSukiSU-with-susfs")
               curl -LSs "https://raw.githubusercontent.com/ReSukiSU/ReSukiSU/main/kernel/setup.sh" | bash -s main
               ;;
           esac
 
-          # --- ANDROID 16 ZYGOTE FIXES (Patil Special) ---
-          sed -i 's/security_ptrace_access_check(child, mode)/0/g' kernel/ptrace.c
-          sed -i 's/security_ptrace_traceme(parent)/0/g' kernel/ptrace.c
-          if [ -f "security/selinux/hooks.c" ]; then
-            sed -i 's/return avc_has_perm/return 0; \/\/ avc_has_perm/g' security/selinux/hooks.c
+          # --- Android 16 SDK 36 Zygote Fixes ---
+          PTRACE_FILE=$(find . -name ptrace.c | head -n 1)
+          if [ ! -z "$PTRACE_FILE" ]; then
+            sed -i 's/security_ptrace_access_check(child, mode)/0/g' "$PTRACE_FILE"
+            sed -i 's/security_ptrace_traceme(parent)/0/g' "$PTRACE_FILE"
+          fi
+
+          HOOKS_FILE=$(find . -name hooks.c | grep "selinux" | head -n 1)
+          if [ ! -z "$HOOKS_FILE" ]; then
+            sed -i 's/return avc_has_perm/return 0; \/\/ avc_has_perm/g' "$HOOKS_FILE"
           fi
           
           if [[ "${{ inputs.ksu_type }}" == *susfs ]]; then
@@ -145,15 +147,20 @@ jobs:
             cp ./kernel_patches/include/linux/* ../include/linux/
             cd ..
             patch -p1 < 50_add_susfs_in_gki-android13-5.15.patch
-            echo "CONFIG_KSU_SUSFS=y" >> arch/arm64/configs/gki_defconfig
-            echo "CONFIG_KSU_SUSFS_SUS_PATH=y" >> arch/arm64/configs/gki_defconfig
-            echo "CONFIG_KSU_SUSFS_SUS_MOUNT=y" >> arch/arm64/configs/gki_defconfig
-            echo "CONFIG_KSU_SUSFS_SUS_KSTAT=y" >> arch/arm64/configs/gki_defconfig
-            echo "CONFIG_KSU_SUSFS_SPOOF_UNAME=n" >> arch/arm64/configs/gki_defconfig
-            echo "CONFIG_KSU_SUSFS_ENABLE_LOG=y" >> arch/arm64/configs/gki_defconfig
-            echo "CONFIG_KSU_SUSFS_HIDE_KSU_SUSFS_SYMBOLS=y" >> arch/arm64/configs/gki_defconfig
-            echo "CONFIG_KSU_SUSFS_SPOOF_CMDLINE_OR_BOOTCONFIG=y" >> arch/arm64/configs/gki_defconfig
-            echo "CONFIG_KSU_SUSFS_SUS_MAP=y" >> arch/arm64/configs/gki_defconfig
+            
+            # Auto-detect config file
+            DEFCONFIG="arch/arm64/configs/vendor/kalama_GKI.config" 
+            [ ! -f "$DEFCONFIG" ] && DEFCONFIG="arch/arm64/configs/gki_defconfig"
+
+            echo "CONFIG_KSU_SUSFS=y" >> "$DEFCONFIG"
+            echo "CONFIG_KSU_SUSFS_SUS_PATH=y" >> "$DEFCONFIG"
+            echo "CONFIG_KSU_SUSFS_SUS_MOUNT=y" >> "$DEFCONFIG"
+            echo "CONFIG_KSU_SUSFS_SUS_KSTAT=y" >> "$DEFCONFIG"
+            echo "CONFIG_KSU_SUSFS_SPOOF_UNAME=n" >> "$DEFCONFIG"
+            echo "CONFIG_KSU_SUSFS_ENABLE_LOG=y" >> "$DEFCONFIG"
+            echo "CONFIG_KSU_SUSFS_HIDE_KSU_SUSFS_SYMBOLS=y" >> "$DEFCONFIG"
+            echo "CONFIG_KSU_SUSFS_SPOOF_CMDLINE_OR_BOOTCONFIG=y" >> "$DEFCONFIG"
+            echo "CONFIG_KSU_SUSFS_SUS_MAP=y" >> "$DEFCONFIG"
           fi
           
           touch ./.scmversion

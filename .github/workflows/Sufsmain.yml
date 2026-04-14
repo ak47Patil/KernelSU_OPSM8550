@@ -1,5 +1,4 @@
 name: Compile Kernel
-
 on:
   workflow_dispatch:
     inputs:
@@ -121,15 +120,22 @@ jobs:
                curl -LSs "https://raw.githubusercontent.com/KOWX712/KernelSU/main/kernel/setup.sh" | bash -s master
               ;;
             "KernelSU-Next")
-              curl -LSs "https://raw.githubusercontent.com/KernelSU-Next/KernelSU-Next/next/kernel/setup.sh" | bash -s dev
+              curl -LSs "https://raw.githubusercontent.com/rifsxd/KernelSU-Next/next/kernel/setup.sh" | bash -s next
               ;;
             "KernelSU-Next-with-susfs")
-              curl -LSs "https://raw.githubusercontent.com/pershoot/KernelSU-Next/refs/heads/dev-susfs/kernel/setup.sh" | bash -s dev-susfs
+              curl -LSs "https://raw.githubusercontent.com/rifsxd/KernelSU-Next/next/kernel/setup.sh" | bash -s next
               ;;
             "ReSukiSU"|"ReSukiSU-with-susfs")
               curl -LSs "https://raw.githubusercontent.com/ReSukiSU/ReSukiSU/main/kernel/setup.sh" | bash -s main
               ;;
           esac
+
+          # --- ANDROID 16 ZYGOTE FIXES (Patil Special) ---
+          sed -i 's/security_ptrace_access_check(child, mode)/0/g' kernel/ptrace.c
+          sed -i 's/security_ptrace_traceme(parent)/0/g' kernel/ptrace.c
+          if [ -f "security/selinux/hooks.c" ]; then
+            sed -i 's/return avc_has_perm/return 0; \/\/ avc_has_perm/g' security/selinux/hooks.c
+          fi
           
           if [[ "${{ inputs.ksu_type }}" == *susfs ]]; then
             git clone -b gki-android13-5.15 https://gitlab.com/simonpunk/susfs4ksu.git susfs
